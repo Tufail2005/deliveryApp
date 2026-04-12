@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,3 +7,128 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String    // Ensure this is hashed before saving
+  name      String
+  phone     String?
+  role      Role      @default(CUSTOMER)
+  addresses Address[] // A user can have multiple saved addresses
+  orders    Order[]   // A user's order history
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum Role {
+  CUSTOMER
+  RESTAURANT_OWNER
+  SUPER_ADMIN
+}
+
+// --- TENANTS (HOTELS/RESTAURANTS) ---
+
+model Restaurant {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  isOpen      Boolean    @default(true)
+  
+  // The User who manages this restaurant (Role should be RESTAURANT_OWNER)
+  ownerId     String     
+  
+  address     Address?   // 1-to-1 relationship with the Address model
+  categories  Category[]
+  menuItems   MenuItem[]
+  orders      Order[]
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([ownerId])
+}
+
+// --- UNIFIED ADDRESS MODEL ---
+
+model Address {
+  id           String      @id @default(uuid())
+  street       String
+  city         String
+  state        String
+  zipCode      String
+  country      String      @default("India")
+  latitude     Float?      // Useful for delivery distance tracking
+  longitude    Float?      
+  label        String?     // e.g., "Home", "Office" (Mainly for Users)
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId String?     @unique 
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  @@index([userId])
+}
+
+// --- MENU MANAGEMENT ---
+
+model Category {
+  id           String     @id @default(uuid())
+  name         String
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItems    MenuItem[]
+  @@unique([name, restaurantId]) 
+}
+
+model MenuItem {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  price        Float
+  isAvailable  Boolean     @default(true)
+  imageUrl     String?
+  categoryId   String
+  category     Category    @relation(fields: [categoryId], references: [id])
+  restaurantId String
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
+
+  @@index([restaurantId])
+}
+
+// --- ORDER PROCESSING ---
+
+model Order {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id])
+  restaurantId     String
+  restaurant       Restaurant  @relation(fields: [restaurantId], references: [id])
+  status           OrderStatus @default(PENDING)
+  totalAmount      Float  
+  items            OrderItem[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  @@index([userId])
+  @@index([restaurantId])
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int
+  priceAtBuy Float    // Records the item's price at the exact moment of purchase
+  @@index([orderId])
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
