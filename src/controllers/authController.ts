@@ -6,7 +6,6 @@ import bcrypt from "bcryptjs";
 import "dotenv/config";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 // --- Register ---
 export const register = async (req: Request, res: Response) => {
@@ -19,16 +18,14 @@ export const register = async (req: Request, res: Response) => {
     });
   }
 
-  // Updated to match schema: name and phone (no photo, no userName)
-  // You can optionally allow 'role' to be passed if creating owner accounts via an admin panel
-  const { name, password, phone, role } = result.data;
+  // NOTE: For React Native, pass the verificationToken in the body, not cookies.
+  const { name, password, phone, role, verificationToken } = result.data;
 
   try {
-    // READ VERIFICATION TOKEN FROM COOKIE
-    const verificationToken = req.cookies.verify_token;
-
     if (!verificationToken) {
-      return res.status(401).json({ message: "Email not verified" });
+      return res
+        .status(401)
+        .json({ message: "Verification token is required" });
     }
 
     let decodedEmail: string;
@@ -50,7 +47,6 @@ export const register = async (req: Request, res: Response) => {
         .json({ message: "Invalid or expired verification token" });
     }
 
-    // Check if email exists (name is not unique in schema, so we only check email)
     const existingUser = await prisma.user.findUnique({
       where: {
         email: decodedEmail,
@@ -69,32 +65,22 @@ export const register = async (req: Request, res: Response) => {
         password: hashedPassword,
         email: decodedEmail,
         phone: phone || null,
-        ...(role && { role }), // Defaults to CUSTOMER per schema if not provided
+        ...(role && { role }),
       },
     });
 
-    // ✅ CREATE AUTH TOKEN (Include role for multi-tenant middleware access)
+    // Create auth token
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
 
-    // ✅ SET AUTH COOKIE
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-
-    // ✅ DELETE VERIFICATION COOKIE (ONE-TIME USE)
-    res.clearCookie("verify_token");
-
+    // Send token directly in the JSON response for React Native to store via SecureStore
     return res.status(201).json({
       message: "User created",
       user: { id: user.id, role: user.role },
+      token: token,
     });
   } catch (err: any) {
     console.error("Register Error:", err);
@@ -103,7 +89,6 @@ export const register = async (req: Request, res: Response) => {
 };
 
 // --- Login ---
-
 export const login = async (req: Request, res: Response) => {
   try {
     const validation = loginSchema.safeParse(req.body);
@@ -115,7 +100,6 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Assuming identifier is now strictly email, as names are not unique
     const { email, password } = validation.data;
 
     const user = await prisma.user.findUnique({
@@ -128,25 +112,17 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Include role in JWT payload
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     );
 
-    // Set Secure Cookie
-    res.cookie("auth_token", token, {
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/", // Ensure cookie is accessible on all routes
-    });
-
+    // Send token directly in the JSON response
     return res.json({
       message: "Login successful",
       user: { id: user.id, name: user.name, role: user.role },
+      token: token,
     });
   } catch (error) {
     console.error("Login Error:", error);
@@ -156,12 +132,8 @@ export const login = async (req: Request, res: Response) => {
 
 // --- Logout ---
 export const logout = (req: Request, res: Response) => {
-  res.clearCookie("auth_token", {
-    httpOnly: true,
-    secure: IS_PRODUCTION,
-    sameSite: "none",
-    path: "/",
-  });
+  // In a pure JWT mobile setup, logout is handled client-side by deleting the token from SecureStore.
+  // The backend just sends a success response.
   res.json({ message: "Logged out successfully" });
 };
 
@@ -172,10 +144,8 @@ export const getMe = async (req: Request, res: Response) => {
     return;
   }
 
-  // If we reach here, the 'protect' middleware has already passed
   const user = await prisma.user.findUnique({
     where: { id: req.user?.userId },
-    // Select relevant schema fields
     select: { id: true, name: true, email: true, phone: true, role: true },
   });
 
@@ -190,7 +160,7 @@ export const getMe = async (req: Request, res: Response) => {
 // --- Update User ---
 export const updateUser = async (req: Request, res: Response) => {
   const { userId } = req.user!;
-  const { name, phone } = req.body; // Updated to match schema
+  const { name, phone } = req.body;
 
   try {
     const updated = await prisma.user.update({
@@ -201,7 +171,6 @@ export const updateUser = async (req: Request, res: Response) => {
         name,
         phone,
       },
-      // Only return non-sensitive fields
       select: { id: true, name: true, phone: true },
     });
 
