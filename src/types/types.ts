@@ -10,8 +10,7 @@ export const registerSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
   phone: z.string().optional(),
   role: RoleEnum.optional(),
-
-  //controller extracts the email securely from the 'verify_token' cookie.
+  verificationToken: z.string().min(1, "Verification token is required"),
 });
 
 export const loginSchema = z.object({
@@ -25,7 +24,6 @@ export const updateUserSchema = z.object({
 });
 
 // --- TypeScript Type Exports ---
-// Extracting these types allows to use them elsewhere in your frontend or backend logic
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
