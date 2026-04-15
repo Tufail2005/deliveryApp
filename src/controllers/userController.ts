@@ -2,6 +2,8 @@ import { type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { addressSchema, updateAddressSchema } from "../types/types.js";
 
+import "dotenv/config";
+
 // --- Get All Addresses for Logged-In User ---
 export const getMyAddresses = async (req: Request, res: Response) => {
   const { userId } = req.user!;
@@ -119,5 +121,56 @@ export const deleteAddress = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Delete Address Error:", error);
     return res.status(500).json({ message: "Failed to delete address" });
+  }
+};
+
+// --- Me (Verify Session) ---
+export const getMe = async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Not authenticated" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user?.userId },
+    select: { id: true, name: true, email: true, phone: true, role: true },
+  });
+
+  if (!user) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  res.json(user);
+};
+
+// --- Update User ---
+export const updateUser = async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const { name, phone } = req.body;
+
+  try {
+    const updated = await prisma.user.update({
+      where: {
+        id: userId as string,
+      },
+      data: {
+        name,
+        phone,
+      },
+      select: { id: true, name: true, phone: true },
+    });
+
+    if (updated) {
+      return res.status(200).json({
+        msg: "Update successful",
+        user: updated,
+      });
+    }
+  } catch (error) {
+    console.error("Update Error:", error);
+    return res.status(500).json({
+      message: "Failed to update user",
+    });
   }
 };
