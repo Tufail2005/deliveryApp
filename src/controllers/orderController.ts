@@ -2,7 +2,7 @@ import {type Request, type Response} from "express";
 import { orderSchema } from "../types/types.js";
 import { prisma } from "../lib/prisma.js";
 import { priceCalculator } from "../lib/priceCalculator.js";
-import { OrderStatus } from "../generated/prisma/index.js";
+import { OrderStatus } from "@prisma/client";
 
 export const placeOrder = async (req: Request, res: Response) =>{
     const result = orderSchema.safeParse(req.body);
