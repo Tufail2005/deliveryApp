@@ -83,7 +83,7 @@ export const addItemSchema = z.object({
   isAvailable: z.boolean().default(true),
 });
 
-
+export const  updateAddressSchema = addressSchema.partial();
 // --- TypeScript Type Exports ---
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

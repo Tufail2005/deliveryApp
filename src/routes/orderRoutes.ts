@@ -14,3 +14,5 @@ router.post("/", protect, placeOrder);
 router.get("/history", protect, orderHistory);
 router.get("/:id", protect, getOrderDetails);
 router.patch("/:id/cancel", protect, cancelOrder); 
+
+export default router;

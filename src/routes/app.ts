@@ -1,6 +1,6 @@
 import express from "express";
 import authRouter from "./authRoutes.js";
-import userRouter from "/userRoutes.js"
+import userRouter from "./userRoutes.js"
 import resturentRouter from "./resturentRoutes.js";
 import orderRouter from "./orderRoutes.js"
 

@@ -18,3 +18,5 @@ router.post("/add-item", protect, addItem);
 router.delete("/delete-item/:id", protect, deleteItem);
 router.delete("/delete-catagory/:id", protect, deleteCatagory);
 router.get("/:id/items", protect, itemList);
+
+export default router;
