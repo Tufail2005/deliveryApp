@@ -25,15 +25,15 @@ export const addRestaurant = async (req:Request, res:Response) => {
     
     const { 
         name, description, street, city, state, zipCode, 
-        latitude, longitude, deliverySlabs 
+        latitude, longitude 
     } = result.data;
 
-    const existingRestaurant = await prisma.restaurant.findFirst({
-        where: { ownerId: userId }
-    });
-    if (existingRestaurant) {
-        return res.status(400).json({ message: "You already have a restaurant" });
-    }
+    // const existingRestaurant = await prisma.restaurant.findFirst({
+    //     where: { ownerId: userId }
+    // });
+    // if (existingRestaurant) {
+    //     return res.status(400).json({ message: "You already have a restaurant" });
+    // }
 
     try {
         const newRestaurant = await prisma.restaurant.create({
@@ -50,14 +50,10 @@ export const addRestaurant = async (req:Request, res:Response) => {
                         latitude,
                         longitude,
                     }
-                },
-                deliverySlabs: {
-                    create: deliverySlabs // Maps minDistance, maxDistance, price automatically
                 }
             },
             include: {
                 address: true,
-                deliverySlabs: true
             }
         });
 
@@ -73,57 +69,57 @@ export const addRestaurant = async (req:Request, res:Response) => {
 }
 
 
-export const addCatagories = async (req:Request, res:Response) => {
-    const userId = req.user?.userId;
+// export const addCatagories = async (req:Request, res:Response) => {
+//     const userId = req.user?.userId;
 
-    if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-    }
+//     if (!userId) {
+//         return res.status(401).json({ message: "Unauthorized" });
+//     }
 
-    if (req.user?.role !== 'RESTAURANT_OWNER' && req.user?.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({ message: "Only owners can create restaurants" });
-    }
+//     if (req.user?.role !== 'RESTAURANT_OWNER' && req.user?.role !== 'SUPER_ADMIN') {
+//         return res.status(403).json({ message: "Only owners can create restaurants" });
+//     }
 
-    const result = createCategorySchema.safeParse(req.body);
-    if(!result.success){
-        return res.status(400).json({
-            message: "Invalid inputs",
-            errors: result.error.issues
-        })
-    }
-    const { 
-        name, restaurantId
-    } = result.data;
+//     const result = createCategorySchema.safeParse(req.body);
+//     if(!result.success){
+//         return res.status(400).json({
+//             message: "Invalid inputs",
+//             errors: result.error.issues
+//         })
+//     }
+//     const { 
+//         name, restaurantId
+//     } = result.data;
     
-    try {
-        const restaurant = await prisma.restaurant.findFirst({
-            where: {
-                id: restaurantId,
-                ownerId: userId, // Ensure the logged-in user is the owner
-            },
-        });
+//     try {
+//         const restaurant = await prisma.restaurant.findFirst({
+//             where: {
+//                 id: restaurantId,
+//                 ownerId: userId, // Ensure the logged-in user is the owner
+//             },
+//         });
 
-        if (!restaurant) {
-            return res.status(403).json({ message: "You do not have permission to add categories to this restaurant" });
-        }
+//         if (!restaurant) {
+//             return res.status(403).json({ message: "You do not have permission to add categories to this restaurant" });
+//         }
         
-        const newCatagory = await prisma.category.create({
-            data: {
-                name,
-                restaurantId
-            }
-        });
+//         const newCatagory = await prisma.category.create({
+//             data: {
+//                 name,
+//                 restaurantId
+//             }
+//         });
 
-        return res.status(201).json(
-            {message: " successfully created catagory",
-            newCatagory});
-    } catch (error) {
-        if (error instanceof Error) {
-            return res.status(400).json({ message: error.message });
-        }
-        return res.status(500).json({ message: "Failed to create catagory" });
-    }
-}
+//         return res.status(201).json(
+//             {message: " successfully created catagory",
+//             newCatagory});
+//     } catch (error) {
+//         if (error instanceof Error) {
+//             return res.status(400).json({ message: error.message });
+//         }
+//         return res.status(500).json({ message: "Failed to create catagory" });
+//     }
+// }
 
 
 

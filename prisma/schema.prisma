@@ -37,13 +37,10 @@ model Restaurant {
   address     Address?   // 1-to-1 relationship with the Address model
   isVerified  Boolean  @default(false) // <--- New Field
   status      ApprovalStatus @default(PENDING)
-  categories  Category[]
   menuItems   MenuItem[]
   orders      Order[]
-  deliverySlabs DeliverySlab[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-
   @@index([ownerId])
 }
 
@@ -76,16 +73,6 @@ model Address {
 }
 
 // --- MENU MANAGEMENT ---
-
-model Category {
-  id           String     @id @default(uuid())
-  name         String
-  restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  menuItems    MenuItem[]
-  @@unique([name, restaurantId]) 
-}
-
 model MenuItem {
   id           String      @id @default(uuid())
   name         String
@@ -93,9 +80,8 @@ model MenuItem {
   price        Float
   isAvailable  Boolean     @default(true)
   imageUrl     String?
-  categoryId   String
   isDeleted Boolean @default(false)
-  category     Category    @relation(fields: [categoryId], references: [id])
+  category     ItemCategory @default(OTHERS)
   restaurantId String
   restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orderItems   OrderItem[]
@@ -140,8 +126,6 @@ model DeliverySlab {
   minDistance  Float      // in km (e.g., 0)
   maxDistance  Float      // in km (e.g., 2)
   price        Float      // (e.g., 20)
-  restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
 
@@ -152,4 +136,45 @@ enum OrderStatus {
   OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
+}
+
+enum ItemCategory {
+  // Broad Cuisines
+  NORTH_INDIAN
+  SOUTH_INDIAN
+  CHINESE
+  ITALIAN
+  ASIAN
+  
+  // High-Volume Specifics
+  BIRYANI
+  BURGER
+  PIZZA
+  MOMO
+  ROLLS
+  DOSA
+  THALI
+  
+  // Meal Types
+  CHICKEN
+  MUTTON
+  FISH
+  PANEER
+  DAL
+  
+  // Breakfast & Snacks
+  PARATHA
+  SANDWICH
+  CHAAT
+  SNACKS
+  
+  // Sweet & Bakery
+  DESSERTS
+  CAKE
+  ICE_CREAM
+  
+  // Sides & Others
+  BEVERAGES
+  SALAD_BOWL
+  OTHERS
 }
