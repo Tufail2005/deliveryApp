@@ -1,6 +1,7 @@
 import { type Request, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { addressSchema, updateAddressSchema } from "../types/types.js";
+import { protect } from "../middlewares/authMiddleware.js";
 
 import "dotenv/config";
 
@@ -33,48 +34,6 @@ export const addAddress = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Add Address Error:", error);
     return res.status(500).json({ message: "Failed to add address" });
-  }
-};
-
-// --- Update an Existing Address ---
-export const updateAddress = async (req: Request, res: Response) => {
-  const { userId } = req.user!;
-  const addressId = req.params.id as string; // Expecting the ID in the URL: /api/users/address/:id
-
-  const validation = updateAddressSchema.safeParse(req.body);
-  if (!validation.success) {
-    return res.status(400).json({
-      message: "Invalid address data",
-      errors: validation.error.format(),
-    });
-  }
-
-  try {
-    // 1. Security Check: Ensure the address exists AND belongs to the user
-    // If a malicious user tries to pass someone else's address ID, this stops them.
-    const existingAddress = await prisma.address.findFirst({
-      where: { id: addressId, userId: userId },
-    });
-
-    if (!existingAddress) {
-      return res
-        .status(404)
-        .json({ message: "Address not found or unauthorized" });
-    }
-
-    // 2. Perform the update
-    const updatedAddress = await prisma.address.update({
-      where: { id: addressId },
-      data: validation.data as any,
-    });
-
-    return res.status(200).json({
-      message: "Address updated successfully",
-      address: updatedAddress,
-    });
-  } catch (error) {
-    console.error("Update Address Error:", error);
-    return res.status(500).json({ message: "Failed to update address" });
   }
 };
 
