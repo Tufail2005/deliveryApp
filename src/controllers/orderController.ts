@@ -3,6 +3,14 @@ import { orderSchema } from "../types/types.js";
 import { prisma } from "../lib/prisma.js";
 import { priceCalculator } from "../lib/priceCalculator.js";
 import { OrderStatus } from "@prisma/client";
+import Razorpay from "razorpay";
+import crypto from "crypto";
+
+// Initialize Razorpay Instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
+});
 
 export const placeOrder = async (req: Request, res: Response) => {
   const result = orderSchema.safeParse(req.body);
@@ -28,6 +36,7 @@ export const placeOrder = async (req: Request, res: Response) => {
       orderItems,
     } = await priceCalculator(restaurantId, items, addressId);
 
+    // 1. Create the Order in your Database first
     const newOrder = await prisma.order.create({
       data: {
         userId,
@@ -38,6 +47,7 @@ export const placeOrder = async (req: Request, res: Response) => {
         addressId,
         deliveryFee,
         totalAmount,
+        paymentStatus: "PENDING", // Ensure this exists in your Prisma schema
         items: {
           create: orderItems,
         },
@@ -45,15 +55,82 @@ export const placeOrder = async (req: Request, res: Response) => {
       include: { items: true },
     });
 
+    // 2. Create the secure order token on Razorpay's servers
+    const razorpayOptions = {
+      amount: Math.round(totalAmount * 100), // Razorpay requires subunits (paise)
+      currency: "INR",
+      receipt: `receipt_${newOrder.id.slice(0, 10)}`,
+    };
+
+    const razorpayOrder = await razorpay.orders.create(razorpayOptions);
+
+    // 3. Attach the Razorpay Order ID to your database record
+    await prisma.order.update({
+      where: { id: newOrder.id },
+      data: { razorpayOrderId: razorpayOrder.id },
+    });
+
+    // 4. Send everything the frontend needs to open the payment modal
     return res.status(201).json({
       message: "Order placed successfully",
       order: newOrder,
+      paymentDetails: {
+        razorpayOrderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+      },
     });
   } catch (error) {
     if (error instanceof Error) {
       return res.status(400).json({ message: error.message });
     }
     return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Verify Razorpay Payment Signature after frontend checkout
+// @route   POST /api/order/verify-payment
+export const verifyPayment = async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      database_order_id,
+    } = req.body;
+
+    // 1. Recreate the cryptographic signature
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .update(sign.toString())
+      .digest("hex");
+
+    // 2. Verify and securely update the database
+    if (razorpay_signature === expectedSign) {
+      await prisma.order.update({
+        where: { id: database_order_id },
+        data: {
+          paymentStatus: "PAID",
+          razorpayPaymentId: razorpay_payment_id,
+          status: OrderStatus.ACCEPTED,
+          // Optional: can auto-update the overall OrderStatus to "ACCEPTED" here too
+        },
+      });
+
+      return res
+        .status(200)
+        .json({ success: true, message: "Payment verified successfully" });
+    } else {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid payment signature" });
+    }
+  } catch (error) {
+    return res.status(500).json({ message: "Payment verification failed" });
   }
 };
 
