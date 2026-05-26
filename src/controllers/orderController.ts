@@ -389,3 +389,88 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to update order status" });
   }
 };
+
+
+// @desc    Get paginated orders for the logged-in customer filtered by type
+// @route   GET /api/order//customer-order
+export const getCustomerOrders = async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    // 1. Extract query parameter strings and configure safe defaults
+    const type = (req.query.type as string) === "ongoing" ? "ongoing" : "history";
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    // 2. Build conditional where block based on your active schema enums
+    const statusQuery = 
+      type === "ongoing"
+        ? { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] }
+        : { in: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] };
+
+    // 3. Query limited batch rows from your database
+    const dbOrders = await prisma.order.findMany({
+      where: {
+        userId: userId,
+        status: statusQuery,
+      },
+      include: {
+        restaurant: { select: { name: true } },
+        items: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: skip,
+      take: limit,
+    });
+
+    // 4. Get total count to inform the frontend if there are more items to load
+    const totalCount = await prisma.order.count({
+      where: {
+        userId: userId,
+        status: statusQuery,
+      }
+    });
+
+    const hasMore = skip + dbOrders.length < totalCount;
+
+    const formattedOrders = dbOrders.map((order) => {
+      const isOngoing =
+        order.status !== OrderStatus.DELIVERED && 
+        order.status !== OrderStatus.CANCELLED;
+
+      let statusDisplay = order.status.replace(/_/g, " ");
+      statusDisplay = statusDisplay.charAt(0) + statusDisplay.slice(1).toLowerCase();
+
+      return {
+        id: `#${order.id.slice(-6).toUpperCase()}`,
+        rawId: order.id,
+        restaurant: order.restaurant?.name || "Partner Kitchen",
+        status: statusDisplay,
+        rawStatus: order.status,
+        isOngoing: isOngoing,
+        total: order.totalAmount,
+        items: order.items.length || 1,
+        date: new Date(order.createdAt).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      orders: formattedOrders,
+      hasMore,
+    });
+  } catch (error) {
+    console.error("Fetch Customer Orders Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
