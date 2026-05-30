@@ -45,6 +45,7 @@ export const addressSchema = z.object({
   latitude: z.number().nullish(),
   longitude: z.number().nullish(),
   label: z.string().optional(), // e.g., "Home", "Office"
+  isDefault: z.boolean().optional(),
 });
 
 export const updateAddressSchema = addressSchema.partial();

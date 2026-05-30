@@ -68,6 +68,7 @@ model Address {
   latitude     Float?      // Useful for delivery distance tracking
   longitude    Float?      
   label        String?     // e.g., "Home", "Office" (Mainly for Users)
+  isDefault    Boolean    @default(false) // Indicates if this is the default address for the user
   userId       String?
   user         User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   restaurantId String?     @unique 

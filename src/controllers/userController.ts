@@ -135,3 +135,33 @@ export const getMyAddresses = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch addresses" });
   }
 };
+
+// @desc    Set a specific address as the active/default
+// @route   PATCH /api/user/addresses/:id/default
+export const setActiveAddress = async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const addressId = req.params.id as string;
+
+  try {
+    // Execute both updates as a single atomic transaction
+    await prisma.$transaction([
+      // 1. Remove default status from ALL of this user's addresses
+      prisma.address.updateMany({
+        where: { userId: userId },
+        data: { isDefault: false },
+      }),
+      // 2. Set the requested address to default
+      prisma.address.update({
+        where: { id: addressId, userId: userId },
+        data: { isDefault: true },
+      }),
+    ]);
+
+    return res
+      .status(200)
+      .json({ message: "Active address updated successfully" });
+  } catch (error) {
+    console.error("Set Default Address Error:", error);
+    return res.status(500).json({ message: "Failed to set active address" });
+  }
+};
