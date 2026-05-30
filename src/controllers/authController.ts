@@ -1,8 +1,7 @@
 import { type Request, type Response } from "express";
+import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { sendOtpSchema, verifyOtpSchema } from "../types/types.js";
-import jwt from "jsonwebtoken";
-import { z } from "zod";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -32,70 +31,84 @@ export const sendOtp = async (req: Request, res: Response) => {
   }
 };
 
-// ---  Verify OTP & Authenticate ---
+
+// --- Verify OTP & Authenticate ---
 export const verifyOtp = async (req: Request, res: Response) => {
-  const validation = verifyOtpSchema.safeParse(req.body);
-  if (!validation.success) {
-    return res.status(400).json({ message: "Invalid inputs" });
+  const { phone, otp } = req.body; 
+
+  if (!phone || !otp) {
+    return res.status(400).json({ message: "Phone and OTP parameters are required" });
   }
 
-  const { phone, otp } = validation.data;
-
   try {
-    // TODO: Verify the OTP with your SMS provider
-    // Example: const verification = await twilioClient.verify.v2.services(serviceSid).verificationChecks.create({ to: phone, code: otp });
-    // if (verification.status !== 'approved') throw new Error("Invalid OTP");
+    // 🚀 PRODUCTION SANITIZATION LOGIC:
+    // Extract the last 10 digits of the string to strip out country codes like '+91' or '0'
+    // Ensures '9876543210' and '+919876543210' resolve to the exact same database record!
+    const sanitizedPhone = phone.replace(/\D/g, "").slice(-10);
 
-    // For development, we mock a successful check if the OTP is 123456
+    if (sanitizedPhone.length !== 10) {
+      return res.status(400).json({ message: "Invalid phone number format. Please provide a 10-digit number." });
+    }
+
+    // Development Mock Check: Always bypasses if code matches 123456
     if (otp !== "123456") {
       return res.status(401).json({ message: "Invalid or expired OTP" });
     }
 
-    // 1. Check if the user already exists
+    // 1. Fetch user matching their sanitized phone and load their array relation models
     let user = await prisma.user.findUnique({
-      where: { phone: phone },
+      where: { phone: sanitizedPhone },
+      include: {
+        addresses: true, // Satisfies your schema relation property
+      },
     });
 
     let isNewUser = false;
 
-    // 2. If user doesn't exist, Auto-Register them
+    // 2. Auto-Register if they turn up missing in database rows
     if (!user) {
       user = await prisma.user.create({
         data: {
-          phone: phone,
+          phone: sanitizedPhone,
           role: "CUSTOMER",
+        },
+        include: {
+          addresses: true, // Keeps typing uniform for the payload down under
         },
       });
       isNewUser = true;
     }
 
-    // 3. Generate the final JWT token
+    // 3. Generate secure application access session parameters
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       JWT_SECRET,
       { expiresIn: "30d" } // Mobile sessions usually last longer
     );
 
-    // 4. Send token and user data to React Native
+    // 4. Verification Check: Profile is complete only if they have assigned a Name 
+    // AND they have created at least 1 index entry inside your Address table setup
+    const hasSavedAddress = user.addresses && user.addresses.length > 0;
+    const isProfileComplete = !!(user.name && hasSavedAddress);
+
+    // 5. Send payload back to your Expo application frontend
     return res.status(200).json({
-      message: isNewUser
-        ? "Account created successfully"
-        : "Logged in successfully",
-      isNewUser: isNewUser, // Tells React Native what screen to show next
+      message: isNewUser ? "Account created successfully" : "Logged in successfully",
+      isNewUser: isNewUser,
       user: {
         id: user.id,
         phone: user.phone,
         name: user.name,
         role: user.role,
+        isProfileComplete: isProfileComplete, // Frontend reads this flag to control routing path directions
       },
       token: token,
     });
   } catch (error) {
-    console.error("Verify OTP Error:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    console.error("Verify OTP Pipeline Crash:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 // --- Logout ---
 export const logout = (req: Request, res: Response) => {
   // In a pure JWT mobile setup, logout is handled client-side by deleting the token from SecureStore.
