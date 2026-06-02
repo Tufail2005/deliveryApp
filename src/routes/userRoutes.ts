@@ -3,6 +3,7 @@ import { protect } from "../middlewares/authMiddleware.js";
 import {
   addAddress,
   deleteAddress,
+  getDefaultAddress,
   getMyAddresses,
   getUserProfile,
   setActiveAddress,
@@ -21,4 +22,6 @@ router.get("/me", protect, getUserProfile);
 router.get("/addresses", protect, getMyAddresses);
 router.put("/update", protect, updateUser);
 router.patch("/addresses/:id/default", protect, setActiveAddress);
+// Add this to your user routes:
+router.get("/addresses/default", protect, getDefaultAddress);
 export default router;

@@ -165,3 +165,33 @@ export const setActiveAddress = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to set active address" });
   }
 };
+
+// @desc    Get ONLY the user's active/default address
+// @route   GET /api/user/addresses/default
+export const getDefaultAddress = async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+
+  try {
+    // 1. Ask Prisma for the specific default address natively
+    let activeAddress = await prisma.address.findFirst({
+      where: {
+        userId: userId,
+        isDefault: true,
+      },
+    });
+
+    // 2. Safe Fallback: If they somehow don't have a default set yet, grab their newest address
+    if (!activeAddress) {
+      activeAddress = await prisma.address.findFirst({
+        where: { userId: userId },
+        orderBy: { createdAt: "desc" },
+      });
+    }
+
+    // 3. Return a single object, NOT an array!
+    return res.status(200).json(activeAddress || null);
+  } catch (error) {
+    console.error("Get Default Address Error:", error);
+    return res.status(500).json({ message: "Failed to fetch default address" });
+  }
+};
