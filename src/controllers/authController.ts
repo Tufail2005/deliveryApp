@@ -50,8 +50,8 @@ export const verifyOtp = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid phone number format. Please provide a 10-digit number." });
     }
 
-    // Development Mock Check: Always bypasses if code matches 123456
-    if (otp !== "123456") {
+    // Development Mock Check: Always bypasses if code matches 1234
+    if (otp !== "1234") {
       return res.status(401).json({ message: "Invalid or expired OTP" });
     }
 
