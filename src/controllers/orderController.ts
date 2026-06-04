@@ -88,7 +88,6 @@ export const placeOrder = async (req: Request, res: Response) => {
   }
 };
 
-
 // @desc    Verify Razorpay Payment Signature after frontend checkout
 // @route   POST /api/order/verify-payment
 export const verifyPayment = async (req: Request, res: Response) => {
@@ -391,25 +390,25 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
   }
 };
 
-
 // @desc    Get paginated orders for the logged-in customer filtered by type
 // @route   GET /api/order//customer-order
 export const getCustomerOrders = async (req: Request, res: Response) => {
   const userId = req.user?.userId;
-  
+
   if (!userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   try {
     // 1. Extract query parameter strings and configure safe defaults
-    const type = (req.query.type as string) === "ongoing" ? "ongoing" : "history";
+    const type =
+      (req.query.type as string) === "ongoing" ? "ongoing" : "history";
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
     // 2. Build conditional where block based on your active schema enums
-    const statusQuery = 
+    const statusQuery =
       type === "ongoing"
         ? { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] }
         : { in: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] };
@@ -434,18 +433,19 @@ export const getCustomerOrders = async (req: Request, res: Response) => {
       where: {
         userId: userId,
         status: statusQuery,
-      }
+      },
     });
 
     const hasMore = skip + dbOrders.length < totalCount;
 
     const formattedOrders = dbOrders.map((order) => {
       const isOngoing =
-        order.status !== OrderStatus.DELIVERED && 
+        order.status !== OrderStatus.DELIVERED &&
         order.status !== OrderStatus.CANCELLED;
 
       let statusDisplay = order.status.replace(/_/g, " ");
-      statusDisplay = statusDisplay.charAt(0) + statusDisplay.slice(1).toLowerCase();
+      statusDisplay =
+        statusDisplay.charAt(0) + statusDisplay.slice(1).toLowerCase();
 
       return {
         id: `#${order.id.slice(-6).toUpperCase()}`,
@@ -472,6 +472,47 @@ export const getCustomerOrders = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Fetch Customer Orders Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// @desc    Preview real order pricing (Subtotal, Tax, Delivery) before checkout
+// @route   POST /api/order/calculate-price
+export const calculateOrderPrice = async (req: Request, res: Response) => {
+  const result = orderSchema.safeParse(req.body);
+
+  if (!result.success) {
+    return res.status(400).json({
+      message: "Invalid inputs",
+      errors: result.error.issues,
+    });
+  }
+
+  const { restaurantId, items, addressId } = result.data;
+
+  try {
+    // Run the exact same calculator you use for placeOrder
+    const priceBreakdown = await priceCalculator(
+      restaurantId,
+      items,
+      addressId
+    );
+
+    return res.status(200).json({
+      success: true,
+      breakdown: {
+        subTotal: priceBreakdown.subTotal,
+        taxAmount: priceBreakdown.taxAmount,
+        deliveryFee: priceBreakdown.deliveryFee,
+        discountAmount: priceBreakdown.discountAmount,
+        totalAmount: priceBreakdown.totalAmount,
+        distance: priceBreakdown.distance,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ message: error.message });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };
