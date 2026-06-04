@@ -9,7 +9,8 @@ import {
   updateOrderStatus,
   getDashboardStats,
   verifyPayment,
-  getCustomerOrders
+  getCustomerOrders,
+  calculateOrderPrice,
 } from "../controllers/orderController.js";
 
 import { protect } from "../middlewares/authMiddleware.js";
@@ -47,5 +48,6 @@ router.patch(
 router.get("/:id", protect, getOrderDetails);
 
 router.get("/customer-order", protect, getCustomerOrders);
+router.post("/calculate-price", protect, calculateOrderPrice);
 
 export default router;
