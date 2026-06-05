@@ -54,12 +54,13 @@ export const deleteAddress = async (req: Request, res: Response) => {
         .json({ message: "Address not found or unauthorized" });
     }
 
-    // 2. Delete
-    await prisma.address.delete({
+    // SOFT DELETE: Just flip the flag
+    await prisma.address.update({
       where: { id: addressId },
+      data: { isDeleted: true },
     });
 
-    return res.status(200).json({ message: "Address deleted successfully" });
+    return res.status(200).json({ message: "Address removed successfully" });
   } catch (error) {
     console.error("Delete Address Error:", error);
     return res.status(500).json({ message: "Failed to delete address" });
