@@ -107,7 +107,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: req.user?.userId },
+    where: { id: req.user?.userId, isDeleted: false },
     select: { id: true, name: true, phone: true, role: true },
   });
 
@@ -126,7 +126,7 @@ export const getMyAddresses = async (req: Request, res: Response) => {
 
   try {
     const addresses = await prisma.address.findMany({
-      where: { userId: userId },
+      where: { userId: userId, isDeleted: false },
       orderBy: { createdAt: "desc" }, // Shows the newest addresses first
     });
 
