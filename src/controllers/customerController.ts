@@ -4,23 +4,44 @@ import { string, success } from "zod";
 import { ItemCategory } from "@prisma/client";
 import { catchall } from "zod/mini";
 
-// @desc    Get all open and approved restaurants
+
+// @desc    Get all open and approved restaurants filtered by city
 // @route   GET /api/customer/restaurants
 export const getAllRestaurants = async (req: Request, res: Response) => {
   try {
+    const { city } = req.query;
+
+    // 🚀 If the city parameter is missing, return an empty array instantly
+    // This prevents out-of-bounds cross-town lookups on initial boot phase
+    if (!city || typeof city !== "string") {
+      return res.status(200).json({ 
+        success: true, 
+        restaurants: [],
+        message: "City parameter is missing. Feed restricted."
+      });
+    }
+
     const restaurants = await prisma.restaurant.findMany({
       where: {
         isOpen: true,
         isVerified: true,
         status: "APPROVED",
+        // 🚀 FILTER VIA RELATION: Drill directly down into your shared Address table
+        address: {
+          city: {
+            equals: city.trim(),
+            mode: "insensitive", // Case-insensitive: matches "sarupathar", "Sarupathar", or "SARUPATHAR"
+          },
+        },
       },
       include: {
-        address: true,
+        address: true, // Keep including address data so the frontend can display location text/coordinates
       },
     });
 
     res.status(200).json({ success: true, restaurants: restaurants });
   } catch (error: any) {
+    console.error("Error inside getAllRestaurants controller:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch restaurants",
